@@ -9,6 +9,7 @@
 -export([send_message/5]).
 -export([send_stanza_result/4]).
 -export([request_vcard/4]).
+-export([send_raw_xml/3]).
 
 -include_lib("kernel/include/inet.hrl").
 
@@ -77,6 +78,9 @@ send_stanza_result(StanzaId, FromJid, Pid, From) ->
 request_vcard(FromJid, ToJid, Pid, From) ->
 	send_command(Pid, {request_vcard, FromJid, ToJid, From}).
 
+send_raw_xml(Xml, Pid, From) ->
+	send_command(Pid, {send_raw_xml, Xml, From}).
+
 send_command(Pid, Command) -> case is_process_alive(Pid) of
 	true -> Pid ! Command, ok; false -> error end.
 
@@ -140,6 +144,8 @@ receive
 	{request_vcard, FromJid, ToJid, From} ->
 		StanzaId = generate_stanza_id(),
 		send(StanzaId, ?XepVCard(StanzaId, FromJid, ToJid), TcpSet, From);
+
+	{send_raw_xml, Xml, From} -> send_async(Xml, TcpSet, From);
 
 	{Tcp, Socket, Data} ->
 		io:format("Other data: ~p~n", [Data]),

@@ -11,6 +11,7 @@
 -export([send_message/4]).
 -export([send_stanza_result/3]).
 -export([request_vcard/3]).
+-export([send_raw_xml/2]).
 -export([init/1, handle_call/3, handle_cast/2,
 	handle_info/2, terminate/2, code_change/3]).
 
@@ -43,6 +44,8 @@ send_stanza_result(ID, StanzaId, FromJid) ->
 	call({send_stanza_result, ID, StanzaId, FromJid}).
 
 request_vcard(ID, FromJid, ToJid) -> call({request_vcard, ID, FromJid, ToJid}).
+
+send_raw_xml(ID, Xml) -> call({send_raw_xml, ID, Xml}).
 
 call(Message) -> gen_server:call(?MODULE, Message, infinity).
 
