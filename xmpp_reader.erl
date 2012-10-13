@@ -13,6 +13,7 @@
 
 -include("rfc/xmpp_im_obsolete.hrl").
 
+-include("xep/ping.hrl").
 -include("xep/vcard_temp.hrl").
 -include("xep/vcard_temp_tools.hrl").
 
@@ -125,7 +126,8 @@ read_stream_error(Condition, Value, Optional) -> #streamError{
 		case Condition of
 			'see-other-host' -> read_text(Value);
 			_ -> []
-		end,
+		end
+	},
 	optional = read_optional(Optional)
 }.
 
@@ -141,6 +143,7 @@ read_stanza(Stanza, Attributes, Content) ->
 read_stanza(iq, ?XmppBindIn(Jid)) -> read_text(Jid);
 read_stanza(iq, ?XmppRosterIn(Items)) -> read_roster_items(Items);
 read_stanza(iq, ?XepVCardIn(VCard)) -> read_vcard(VCard);
+read_stanza(iq, ?XepPing) -> ping;
 read_stanza(presence, Presence) -> read_presence(Presence);
 read_stanza(message, Message) -> read_message(Message);
 read_stanza(_, _) -> [].

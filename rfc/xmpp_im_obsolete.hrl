@@ -11,4 +11,3 @@
 
 -define(XmppStreamFeatureSessionIn(Content),
 	#xmlElement{name = 'session', content = Content}).
-
