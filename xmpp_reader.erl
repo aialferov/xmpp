@@ -77,22 +77,18 @@ build_response(Document) -> case Document of
 	?XmppStartTlsProceedIn -> tls_proceed;
 	?XmppStartTlsFailureIn -> tls_failure;
 
-	?XmppStreamHeaderIn([?XmppStreamErrorIn(
-		'see-other-host', [#xmlText{value = Host}], Optional)]) ->
-			{stream_error, {'see-other-host', Host}, read_optional(Optional)};
+	?XmppStreamHeaderIn([?XmppStreamErrorIn(Condition, Value, Optional)]) ->
+		read_stream_error(Condition, Value, Optional);
 
-	?XmppStreamHeaderIn([?XmppStreamErrorIn(Condition, [], Optional)]) ->
-		{stream_error, Condition, read_optional(Optional)};
-
-	?XmppStreamErrorIn(Condition, [], Optional) ->
-		{stream_error, Condition, read_optional(Optional)};
+	?XmppStreamErrorIn(Condition, Value, Optional) ->
+		read_stream_error(Condition, Value, Optional);
 
 	?XmppSaslChallengeIn(Content) -> {sasl_challenge, Content};
 
 	?XmppSaslSuccessIn -> sasl_success;
 
-	?XmppSaslFailueIn(Condition, Optional) ->
-		{sasl_failure, Condition, read_optional(Optional)};
+	?XmppSaslFailueIn(Condition, Text) ->
+		{sasl_failure, Condition, read_text(Text)};
 
 	?XmppStanzaIn(Stanza, Attributes, Content) ->
 		read_stanza(Stanza, Attributes, Content);
@@ -123,6 +119,15 @@ read_features(Content) -> lists:map(fun
 
 	(Other) -> Other
 end, Content).
+
+read_stream_error(Condition, Value, Optional) -> #streamError{
+	condition = #condition{name = Condition, value =
+		case Condition of
+			'see-other-host' -> read_text(Value);
+			_ -> []
+		end,
+	optional = read_optional(Optional)
+}.
 
 read_stanza(Stanza, Attributes, Content) ->
 	StanzaAttributes = read_stanza_attributes(Attributes),
@@ -170,26 +175,21 @@ read_message(Message) -> lists:foldl(fun
 	end
 end, #message{}, Message).
 
-read_stanza_error([?XmppStanzaErrorIn(Attributes, Content)|_]) -> lists:foldl(
-	fun	(?XmppStanzaErrorTextIn(TextAttributes, Text), StanzaError) ->
-			(read_stanza_error(TextAttributes, StanzaError))
-				#stanzaError{text = read_text(Text)};
-		(ApplicationCondition, StanzaError) -> StanzaError#stanzaError{
-			application_condition = ApplicationCondition}
-	end,
-	read_stanza_error(Attributes, #stanzaError{condition = Condition}),
-	Content
-);
+read_stanza_error([?XmppStanzaErrorIn(
+	Attributes, Condition, ConditionValue, Optional)|_]
+) ->
+	lists:foldl(
+		fun(#xmlAttribute{name = Name, value = Value}, Error) -> case Name of
+			by -> Error#stanzaError{by = Value};
+			type -> Error#stanzaError{type = Value}
+		end end,
+		#stanzaError{
+			condition = #condition{name = Condition,
+				value = read_text(ConditionValue)},
+			optional = read_optional(Optional)
+		},
+	Attributes);
 read_stanza_error([_|T]) -> read_stanza_error(T).
-
-read_stanza_error(Attributes, Error) -> lists:foldl(fun
-	(#xmlAttribute{name = Name, value = Value}, OldError) -> case Name of
-		by -> OldError#stanzaError{by = Value};
-		type -> OldError#stanzaError{type = Value};
-		'xml:lang' -> OldError#stanzaError{lang = Value};
-		_ -> OldError
-	end
-end, Error, Attributes).
 
 read_stanza_attributes(Attributes) -> lists:foldl(fun
 	(#xmlAttribute{name = Name, value = Value}, OldAttributes) -> case Name of
@@ -207,10 +207,11 @@ read_vcard(VCard) -> lists:foldl(fun
 	(_, OldVCard) -> OldVCard
 end, #vCard{}, VCard).
 
-read_optional(Optional) -> lists:map(fun	
-	(#xmlElement{name = text, content = Content}) -> read_text(Content);
-	(_) -> []
-end, Optional).
+read_optional(Optional) -> lists:foldl(fun
+	(#xmlElement{name = text, content = Text}, OldOptional) ->
+		OldOptional#optional{text = read_text(Text)};
+	(_, OldOptional) -> OldOptional
+end, #optional{}, Optional).
 
 read_text(Text) -> lists:flatten(lists:map(
 	fun(#xmlText{value = Value}) -> Value end, Text)).

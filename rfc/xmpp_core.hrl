@@ -71,8 +71,8 @@
 -define(XmppSaslSuccessIn, #xmlElement{name = success,
 	namespace = #xmlNamespace{default = 'urn:ietf:params:xml:ns:xmpp-sasl'}}).
 
--define(XmppSaslFailueIn(Condition, Optional), #xmlElement{name = failure,
-	content = [#xmlElement{name = Condition}|Optional],
+-define(XmppSaslFailueIn(Condition, Text), #xmlElement{name = failure,
+	content = [#xmlElement{name = Condition}|Text],
 	namespace = #xmlNamespace{default = 'urn:ietf:params:xml:ns:xmpp-sasl'}
 }).
 -define(XmppSaslChallengeIn(Content), #xmlElement{
@@ -82,12 +82,12 @@
 
 -define(XmppStanzaIn(Stanza, Attributes, Content),
 	#xmlElement{name = Stanza, attributes = Attributes, content = Content}
-	when Stanza == iq orelse Stanza == presence orelse Stanza == message
+		when Stanza == iq orelse Stanza == presence orelse Stanza == message
 ).
 
--define(XmppStanzaErrorIn(Attributes, Content),
+-define(XmppStanzaErrorIn(Attributes, Condition, Value, Optional),
 	#xmlElement{name = error, attributes = Attributes,
-	content = [#xmlElement{name = Condition}|Content]}
+		content = [#xmlElement{name = Condition, content = Value}|Optional]}
 ).
 -define(XmppStanzaErrorTextIn(Attributes, Text),
 	#xmlElement{name = text, attributes = Attributes, content = Text}).
