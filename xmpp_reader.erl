@@ -184,7 +184,8 @@ read_stanza_error([?XmppStanzaErrorIn(
 	lists:foldl(
 		fun(#xmlAttribute{name = Name, value = Value}, Error) -> case Name of
 			by -> Error#stanzaError{by = Value};
-			type -> Error#stanzaError{type = Value}
+			type -> Error#stanzaError{type = Value};
+			_ -> Error
 		end end,
 		#stanzaError{
 			condition = #condition{name = Condition,
