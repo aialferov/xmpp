@@ -34,6 +34,8 @@
 -define(SrvRrProto, "tcp").
 -define(SrvRr, "_" ++ ?SrvRrService ++ "._" ++ ?SrvRrProto ++ ".").
 
+-define(StanzaIDFormat, [4]).
+
 connect({HostName, Port}, From) ->
 	{ok, Socket} = gen_tcp:connect(HostName, Port, []),
 	gen_server:reply(From, ok),
@@ -212,11 +214,4 @@ process_response(_, Response, TcpSet, From) ->
 	gen_server:reply(From, Response),
 	wait_command(TcpSet).
 
-generate_stanza_id() -> hex(binary_to_list(crypto:rand_bytes(4))).
-
-hex([H|T]) -> [hex_digit(H bsr 4), hex_digit(H band 16#f) | hex(T)];
-hex([]) -> [].
-
-hex_digit(Dec) when Dec < 10 -> $0 + Dec;
-hex_digit(Dec) -> $a + Dec - 10.
-
+generate_stanza_id() -> utils_crypto:generate_nonce(?StanzaIDFormat).
