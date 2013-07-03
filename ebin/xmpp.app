@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% Created: 24 May 2012 by Anton I Alferov <casper@ubca-dp>
+%%% Created: 24 May 2013 by Anton I Alferov <casper@ubca-dp>
 %%%-------------------------------------------------------------------
 
 {application, xmpp, [
