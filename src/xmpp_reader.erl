@@ -131,7 +131,7 @@ end, Content).
 read_stream_error(Condition, Value, Optional) -> #streamError{
 	condition = #condition{name = Condition, value =
 		case Condition of
-			'see-other-host' -> read_text(Value);
+			'see-other-host' -> read_host(read_text(Value));
 			_ -> []
 		end
 	},
@@ -227,3 +227,8 @@ end, #optional{}, Optional).
 read_text(Text) -> lists:flatten(lists:map(
 	fun(#xmlText{value = Value}) -> Value end, Text)).
 
+read_host(Host) -> read_host(lists:reverse(Host), []).
+read_host(Host = [$]|_], _Acc) -> {lists:reverse(Host), 0};
+read_host([$:|T], Acc) -> {lists:reverse(T), list_to_integer(Acc)};
+read_host([H|T], Acc) -> read_host(T, [H|Acc]);
+read_host([], Acc) -> {Acc, 0}.

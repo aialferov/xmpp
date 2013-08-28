@@ -92,12 +92,9 @@ feature_fun(Network, _Auth, Pid, Feature) -> {Name, Args} = case Feature of
 end, #function{id = Feature, name = Name, args = Args}.
 
 negotiation_funs(_Network, _Auth, _Pid,
-	?XmppStreamError('see-other-host', Host))
+	?XmppStreamError('see-other-host', {HostName, Port}))
 -> [
-	#function{id = h, name = fun() ->
-		{ok, xmpp_gate:read_host(Host)} end, args = []},
-	#function{id = c, name = fun({HostName, Port}) ->
-		xmpp_gate:connect(HostName, Port) end, args = [#placeholder{id = h}]}
+	#function{id = c, name = fun xmpp_gate:connect/2, args = [HostName, Port]}
 ];
 
 negotiation_funs(_Network, _Auth, _Pid, ?XmppStreamError(Name, Value)) -> [

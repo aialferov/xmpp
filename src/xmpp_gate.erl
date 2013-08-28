@@ -6,7 +6,6 @@
 %%%-------------------------------------------------------------------
 
 -module(xmpp_gate).
--compile(export_all).
 
 -export([connect/2, connect/1, connect_tls/1, close/1]).
 -export([open_stream/2, open_stream/3, close_stream/1]).
@@ -190,10 +189,8 @@ complete_stream_error(StreamError, Tcp = #tcp{closed = Closed}, Response) ->
 handle_stream_error(Se = #streamError{condition =
 	C = #condition{name = 'see-other-host', value = Host}}, Tcp)
 -> 
-	Se#streamError{condition = C#condition{value = case read_host(Host) of
-		{HostName, 0} -> make_host(HostName, Tcp#tcp.port);
-		{_HostName, _Port} -> Host
-	end}}.
+	Se#streamError{condition = C#condition{value = case Host of
+		{HostName, 0} -> {HostName, Tcp#tcp.port}; Host -> Host end}}.
 
 send(Data, #tcp{module = Module, socket = Socket}) ->
 	io:format("Send: ~p ~p~n", [self(), Data]),
@@ -235,14 +232,6 @@ make_tls({ok, Socket}) -> {ok, #tcp{
 make_tls(Error) -> Error.
 
 port(Module, Socket) -> case Module:peername(Socket) of
-	{ok, {_Address, Port}} -> integer_to_list(Port); _Error -> [] end.
-
-read_host(Host) -> read_host(lists:reverse(Host), []).
-read_host(Host = [$]|_], _Acc) -> {lists:reverse(Host), 0};
-read_host([$:|T], Acc) -> {lists:reverse(T), list_to_integer(Acc)};
-read_host([H|T], Acc) -> read_host(T, [H|Acc]);
-read_host([], Acc) -> {Acc, 0}.
-
-make_host(HostName, Port) -> HostName ++ [$:|Port].
+	{ok, {_Address, Port}} -> Port; _Error -> 0 end.
 
 generate_stanza_id() -> utils_crypto:generate_nonce(?StanzaIDFormat).
