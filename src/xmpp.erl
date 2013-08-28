@@ -1,113 +1,194 @@
 %%%-------------------------------------------------------------------
 %%% @author Anton I Alferov <casper@ubca-dp>
-%%% @copyright (C) 2012, Anton I Alferov
+%%% @copyright (C) 2013, Anton I Alferov
 %%%
-%%% Created : 11 Sep 2012 by Anton I Alferov <casper@ubca-dp>
+%%% Created: 23 Aug 2013 by Anton I Alferov <casper@ubca-dp>
 %%%-------------------------------------------------------------------
 
 -module(xmpp).
--behaviour(gen_server).
+-compile(export_all).
 
--export([start_link/0, stop/0]).
--export([connect/2, connect/3, connect_tls/1, close/1]).
--export([open_stream/3, close_stream/1, start_tls/1]).
--export([begin_sasl/3, send_sasl_response/2]).
--export([bind/2, establish_session/2]).
--export([roster_get/2, roster_set/3]).
--export([send_presence/3]).
--export([send_message/4]).
--export([send_stanza_result/3]).
--export([request_vcard/3]).
--export([send_raw_xml/2]).
--export([init/1, handle_call/3, handle_cast/2,
-	handle_info/2, terminate/2, code_change/3]).
+-include("oauth2.hrl").
 
-start_link() ->	gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-stop() -> gen_server:cast(?MODULE, stop).
+-include("utils_sasl.hrl").
+-include("utils_monad.hrl").
 
-connect(ID, HostName) -> call({connect, ID, HostName}).
-connect(ID, HostName, Port) -> call({connect, ID, HostName, Port}).
-connect_tls(ID) -> call({connect_tls, ID}).
-close(ID) -> call({close, ID}).
+-include("../src/rfc/xmpp_core_tools.hrl").
 
-open_stream(ID, FromJid, Service) -> call({open_stream, ID, FromJid, Service}).
-close_stream(ID) -> call({close_stream, ID}).
+-record(auth, {oauth, user_name, password}).
 
-start_tls(ID) -> call({start_tls, ID}).
-begin_sasl(ID, Mechanism, InitialResponse) ->
-	call({begin_sasl, ID, Mechanism, InitialResponse}).
-send_sasl_response(ID, Response) -> call({send_sasl_response, ID, Response}).
-bind(ID, Resource) -> call({bind, ID, Resource}).
-establish_session(ID, ToJid) -> call({establish_session, ID, ToJid}).
+-define(HostName(Network), case Network of
+	live -> "messenger.live.com";
+	google -> "google.com";
+	facebook -> "chat.facebook.com";
+	vkontakte -> "vk.com";
+	odnoklassniki -> "ok.ru"
+end).
 
-roster_get(ID, FromJid) -> call({roster_get, ID, FromJid}).
-roster_set(ID, FromJid, Item) -> call({roster_set, ID, FromJid, Item}).
+-define(Mechanisms, [
+	"OAUTH",
+	"X-OAUTH2",
+	"X-FACEBOOK-PLATFORM",
+	"X-MESSENGER-OAUTH2",
+	"DIGEST-MD5",
+	"PLAIN"
+]).
 
-send_presence(ID, ToJid, Type) -> call({send_presence, ID, ToJid, Type}).
-send_message(ID, FromJid, ToJid, Body) ->
-	call({send_message, ID, FromJid, ToJid, Body}).
+-define(DigestMd5Config, #digest_md5_config{
+	qop = "auth", charset = "utf-8", serv_type = "xmpp"}).
 
-send_stanza_result(ID, StanzaId, FromJid) -> 
-	call({send_stanza_result, ID, StanzaId, FromJid}).
+-define(XmppStreamError(Name, Value), #streamError{
+	condition = #condition{name = Name, value = Value}}).
 
-request_vcard(ID, FromJid, ToJid) -> call({request_vcard, ID, FromJid, ToJid}).
+login(Network, OAuth) -> login({Network, #auth{oauth = OAuth}}).
+login(Network, UserName, Password) -> login({Network,
+	#auth{user_name = UserName, password = Password}}).
 
-send_raw_xml(ID, Xml) -> call({send_raw_xml, ID, Xml}).
+%negotiate(Network, Auth, Pid) -> negotiate(Network, Auth, Pid,
+%	xmpp_gate:open_stream(?HostName(Network), Pid)).
+%
+%login({Network, Auth}) ->
+%	{ok, Pid} = xmpp_gate:connect(?HostName(Network)),
+%	ok = negotiate(Network, Auth, Pid),
+%	{ok, Pid1} = negotiate(Network, Auth, Pid),
+%	ok = negotiate(Network, Auth, Pid1),
+%	{ok, sasl_success} = negotiate(Network, Auth, Pid1),
+%	negotiate(Network, Auth, Pid1);
 
-call(Message) -> gen_server:call(?MODULE, Message, infinity).
+login({Network, Auth}) -> case xmpp_gate:connect(?HostName(Network)) of
+	{ok, Pid} -> login({Network, Auth, Pid}); Error -> Error end;
 
+login({Network, Auth, Pid}) -> login({Network, Auth, Pid, negotiate(
+	Network, Auth, Pid, xmpp_gate:open_stream(?HostName(Network), Pid))});
 
-init(_Args) -> process_flag(trap_exit, true), {ok, []}.
+login({Network, Auth, Pid, Result}) -> case Result of
+	ok -> login({Network, Auth, Pid});
+	{ok, NewPid} when is_pid(NewPid) -> login({Network, Auth, NewPid});
+	{ok, sasl_success} -> login({Network, Auth, Pid});
+	{ok, {sasl_failure, _, _}} -> {error, sasl_failure};
+	{ok, Features} -> {ok, Jid} = jid(Features), {ok, {Jid, Pid}};
+	Error -> Error
+end.
 
-handle_connect(ID, Arg, From, State) ->
-	case lists:keyfind(ID, 1, State) of
-		false ->
-			Pid = spawn_link(xmpp_gate, connect, [Arg, From]),
-			{noreply, [{ID, Pid, From}|State]};
-		_Found -> {reply, {error, already_connected}, State}
-	end.
-handle_request(HandleRequest, ID, From, State) ->
-	case lists:keyfind(ID, 1, State) of
-		false -> {reply, {error, not_connected}, State};
-		{ID, Pid, _OldFrom} ->
-			case HandleRequest(Pid, From) of
-				error -> {reply, {error, not_connected}, State};
-				ok -> {noreply, lists:keyreplace(
-					ID, 1, State, {ID, Pid, From})}
-			end
-	end.
+negotiate(Network, Auth, Pid, {ok, Result}) -> negotiate(utils_monad:do(
+	negotiation_funs(Network, Auth, Pid, Result)));
+negotiate(_Network, _Auth, _Pid, Error) -> Error.
 
-f(F) -> fun(Pid, From) -> xmpp_gate:F(Pid, From) end.
-f(F, A1) -> fun(Pid, From) -> xmpp_gate:F(A1, Pid, From) end.
-f(F, A1, A2) -> fun(Pid, From) -> xmpp_gate:F(A1, A2, Pid, From) end.
-f(F, A1, A2, A3) -> fun(Pid, From) -> xmpp_gate:F(A1, A2, A3, Pid, From) end.
+negotiate([#result{data = undefined}|_]) -> ok;
+negotiate([#result{data = Result}|_]) -> {ok, Result};
+negotiate([#error{reason = Reason}|_]) -> {error, Reason}.
 
-handle_call({connect, ID, HostName}, From, State) ->
-	handle_connect(ID, HostName, From, State);
-handle_call({connect, ID, HostName, Port}, From, State) ->
-	handle_connect(ID, {HostName, Port}, From, State);
+negotiate_features(Network, Auth, Pid, Features) -> negotiate_features(
+	utils_monad:do([feature_fun(Network, Auth, Pid, F) || F <- Features])).
 
-handle_call({Request, ID}, From, State) ->
-	handle_request(f(Request), ID, From, State);
-handle_call({Request, ID, A1}, From, State) ->
-	handle_request(f(Request, A1), ID, From, State);
-handle_call({Request, ID, A1, A2}, From, State) ->
-	handle_request(f(Request, A1, A2), ID, From, State);
-handle_call({Request, ID, A1, A2, A3}, From, State) ->
-	handle_request(f(Request, A1, A2, A3), ID, From, State).
+negotiate_features([]) -> ok;
+negotiate_features(Results = [#result{}|_]) -> {ok, Results};
+negotiate_features(Results = [#error{}|_]) -> {error, Results}.
 
-handle_cast(stop, State) -> {stop, normal, State}.
-handle_info(Info, State) ->
-	io:format("Info: ~p~n", [Info]),
-	{noreply, lists:delete(case Info of
-		{'EXIT', Pid, normal} -> lists:keyfind(Pid, 2, State);
-        {'EXIT', Pid, Reason} ->
-			{ID, Pid, From} = lists:keyfind(Pid, 2, State),
-			gen_server:reply(From, {error, Reason}),
-			{ID, Pid, From}
-	end, State)}.
+feature_fun(Network, _Auth, Pid, Feature) -> {Name, Args} = case Feature of
+	bind -> {fun xmpp_gate:bind/1, [Pid]};
+	session -> {fun xmpp_gate:establish_session/2, [?HostName(Network), Pid]};
+	Feature -> {fun() -> {ok, not_supported} end, []}
+end, #function{id = Feature, name = Name, args = Args}.
 
-terminate(Reason, _State) -> io:format("Terminate: ~p~n", [Reason]), ok.
+negotiation_funs(_Network, _Auth, _Pid,
+	?XmppStreamError('see-other-host', Host))
+-> [
+	#function{id = h, name = fun() ->
+		{ok, xmpp_gate:read_host(Host)} end, args = []},
+	#function{id = c, name = fun({HostName, Port}) ->
+		xmpp_gate:connect(HostName, Port) end, args = [#placeholder{id = h}]}
+];
 
-code_change(_OldVsn, State, _Extra) -> {ok, State}.
+negotiation_funs(_Network, _Auth, _Pid, ?XmppStreamError(Name, Value)) -> [
+	#function{id = e, name = fun() -> {error, {Name, Value}} end, args = []}
+];
 
+negotiation_funs(_Network, _Auth, Pid, {features, [Tls|_]})
+	when Tls == start_tls; Tls == {start_tls, required}
+-> [
+	#function{id = s, name = fun xmpp_gate:start_tls/1, args = [Pid]},
+	#function{id = c, name = fun xmpp_gate:connect_tls/1, args = [Pid]}
+];
+
+negotiation_funs(Network, Auth, Pid,
+	{features, [{mechanisms, Mechanisms}|_]})
+-> [
+	#function{id = n, name = fun negotiate/4, args = [
+		Network, Auth, Pid, mechanism(Mechanisms)]}
+];
+
+negotiation_funs(Network, Auth, Pid, {features, Features}) -> [
+	#function{id = f, name = fun negotiate_features/4,
+		args = [Network, Auth, Pid, Features]}
+];
+
+negotiation_funs(_Network, Auth, Pid, Mechanism = "OAUTH") -> [
+	#function{id = b, name = fun xmpp_gate:begin_sasl/3, args = [
+		Mechanism, utils_sasl:plain_message("=", access_token(Auth)), Pid]}
+%		Mechanism, access_token(Auth), Pid]}
+];
+
+negotiation_funs(_Network, Auth, Pid, Mechanism = "X-OAUTH2") -> [
+	#function{id = b, name = fun xmpp_gate:begin_sasl/3, args = [
+		Mechanism, utils_sasl:plain_message("=", access_token(Auth)), Pid]}
+];
+
+negotiation_funs(_Network, Auth, Pid, Mechanism = "X-MESSENGER-OAUTH2") -> [
+	#function{id = b, name = fun xmpp_gate:begin_sasl/3, args = [
+		Mechanism, access_token(Auth), Pid]}
+];
+
+negotiation_funs(_Network, Auth, Pid, Mechanism = "X-FACEBOOK-PLATFORM") -> [
+	#function{id = b, name = fun xmpp_gate:begin_sasl/3,
+		args = [Mechanism, "=", Pid]},
+	#function{id = r1, name = fun({sasl_challenge, Challenge}) ->
+		Q = utils_http:read_query(binary_to_list(base64:decode(Challenge))),
+		xmpp_gate:send_sasl_response(
+			binary_to_list(base64:encode(utils_http:query_string([
+				{"nonce", utils_lists:keyfind2("nonce", Q)},
+				{"method", utils_lists:keyfind2("method", Q)},
+				{"api_key", client_id(Auth)},
+				{"access_token", access_token(Auth)},
+				{"call_id", "0"},
+				{"v", "1.0"}
+			]))),
+		Pid)
+	end, args = [#placeholder{id = b}]}
+];
+
+negotiation_funs(_Network, Auth, Pid, Mechanism = "PLAIN") -> [
+	#function{id = begin_sasl, name = fun xmpp_gate:begin_sasl/3,
+		args = [Mechanism, utils_sasl:plain_message(
+			user_name(Auth), password(Auth)), Pid]
+	}
+];
+
+negotiation_funs(Network, Auth, Pid, Mechanism = "DIGEST-MD5") -> [
+	#function{id = b, name = fun xmpp_gate:begin_sasl/3,
+		args = [Mechanism, "=", Pid]},
+	#function{id = r1, name = fun({sasl_challenge, Challenge}) ->
+		xmpp_gate:send_sasl_response(utils_sasl:digest_md5_response(
+			user_name(Auth), password(Auth), ?HostName(Network),
+			Challenge, ?DigestMd5Config
+		), Pid)
+	end, args = [#placeholder{id = b}]},
+	#function{id = r2, name = fun xmpp_gate:send_sasl_response/2,
+		args = ["", Pid]}
+].
+
+mechanism(Mechanisms) -> mechanism(Mechanisms, ?Mechanisms).
+mechanism(Mechanisms, [H|T]) -> case lists:member(H, Mechanisms) of
+	true -> {ok, H}; false -> mechanism(Mechanisms, T) end;
+mechanism(_Mechanisms, []) -> {error, no_supported_mechanism}.
+
+jid(Features) -> case lists:keyfind(bind, #result.id, Features) of
+	#result{data = #stanza{content = Jid}} -> {ok, Jid}; 
+	false -> {error, not_found}
+end.
+
+access_token(#auth{oauth = #oauth2{token = #oauth2_token{access = T}}}) -> T.
+client_id(#auth{oauth = #oauth2{client = #oauth2_client{id = ID}}}) -> ID.
+
+user_name(#auth{user_name = UserName}) -> UserName.
+password(#auth{password = Password}) -> Password.
