@@ -24,19 +24,19 @@
 -include("xep/vcard_temp.hrl").
 -include("xep/vcard_temp_tools.hrl").
 
-read_data(Data, MoreDataFun) ->
+read_data(Data, MoreDataMfa) ->
 	case gather_tag(Data) of
 		{ok, whitespace} -> {ok, whitespace};
 		{ok, ?XmppStreamClosingTagName} -> {ok, stream_closed};
 		{ok, ElementName} ->
 			{Document, _Rest} = xmerl_scan:string(Data, [
 				{continuation_fun, fun more_data/3,
-					{MoreDataFun, list_to_atom(ElementName)}},
+					{MoreDataMfa, list_to_atom(ElementName)}},
 				{hook_fun, fun switch_hook_state/2}
 			]),
 			{ok, build_response(Document)};
-		{error, incomplete} -> case MoreDataFun() of
-			{ok, MoreData} -> read_data(Data ++ MoreData, MoreDataFun);
+		{error, incomplete} -> case wait_more_data(MoreDataMfa) of
+			{ok, MoreData} -> read_data(Data ++ MoreData, MoreDataMfa);
 			Error -> Error
 		end
 	end.
@@ -56,13 +56,15 @@ switch_hook_state(Entity, GlobalState) -> case Entity of
 	#xmlText{} -> {Entity, GlobalState}
 end.
 
-more_data({_, ?XmppStreamTagName}, ClosingTag)
-	when ClosingTag == ?XmppStreamFeaturesTagName
-	orelse ClosingTag == ?XmppStreamErrorTagName ->
-		{ok, ?XmppStreamClosingTag};
+more_data({_, ?XmppStreamTagName}, ClosingTag) when
+	ClosingTag == ?XmppStreamFeaturesTagName;
+	ClosingTag == ?XmppStreamErrorTagName
+-> {ok, ?XmppStreamClosingTag};
 more_data({_, StartingTag}, ClosingTag)
 	when StartingTag == ClosingTag -> {ok, done};
-more_data({MoreDataFun, _}, _) -> MoreDataFun().
+more_data({MoreDataMfa, _}, _) -> wait_more_data(MoreDataMfa).
+
+wait_more_data({M, F, A}) -> apply(M, F, A).
 
 gather_tag(" ") -> {ok, whitespace};
 gather_tag("<" ++ T) -> gather_tag(T, []);

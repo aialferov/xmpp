@@ -63,7 +63,7 @@ wait(Tcp) -> receive Message -> case tcp_dispatch(Message, Tcp) of
 end end.
 
 read(StanzaId, Data, Tcp) -> xmpp_result:read(StanzaId,
-	xmpp_reader:read_data(Data, fun() -> wait(Tcp) end), Tcp).
+	xmpp_reader:read_data(Data, {?MODULE, wait, [Tcp]}), Tcp).
 
 tcp_dispatch(Message, #tcp{
 	socket = Socket, proto = Proto,
