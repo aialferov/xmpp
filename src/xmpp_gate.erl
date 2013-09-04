@@ -35,64 +35,59 @@
 
 -define(StanzaIDFormat, [4]).
 
-connect(HostName, Port) ->
-	init_dispatcher(xmpp_transport:connect(HostName, Port)).
+connect(HostName, Port) -> xmpp_transport:connect(HostName, Port).
+connect(HostName) -> xmpp_transport:connect(HostName).
 
-connect(HostName) -> init_dispatcher(xmpp_transport:connect(HostName)).
+connect_tls(Tcp) -> xmpp_transport:connect_tls(Tcp).
 
-connect_tls(Pid) -> xmpp_dispatcher:enqueue(connect_tls, Pid).
-close(Pid) -> xmpp_dispatcher:enqueue(close, Pid).
+close(Tcp) -> xmpp_transport:close(Tcp).
 
-open_stream(ToJid, Pid) -> open_stream([], ToJid, Pid).
-open_stream(FromJid, ToJid, Pid) ->
-	send_request(?XmppStreamHeader(FromJid, ToJid), Pid).
-close_stream(Pid) -> send_request(?XmppStreamClosingTag, Pid).
+open_stream(ToJid, Tcp) -> open_stream([], ToJid, Tcp).
+open_stream(FromJid, ToJid, Tcp) ->
+	send_request(?XmppStreamHeader(FromJid, ToJid), Tcp).
+close_stream(Tcp) -> send_request(?XmppStreamClosingTag, Tcp).
 
-start_tls(Pid) -> send_request(?XmppStartTlsCommand, Pid).
+start_tls(Tcp) -> send_request(?XmppStartTlsCommand, Tcp).
 
-begin_sasl(Mechanism, InitialResponse, Pid) ->
-	send_request(?XmppSaslBeginCommand(Mechanism, InitialResponse), Pid).
-send_sasl_response(Response, Pid) ->
-	send_request(?XmppSaslResponse(Response), Pid).
+begin_sasl(Mechanism, InitialResponse, Tcp) ->
+	send_request(?XmppSaslBeginCommand(Mechanism, InitialResponse), Tcp).
+send_sasl_response(Response, Tcp) ->
+	send_request(?XmppSaslResponse(Response), Tcp).
 
-bind(Pid) -> bind([], Pid).
-bind(Resource, Pid) -> StanzaId = generate_stanza_id(),
-	send_request(StanzaId, ?XmppBind(StanzaId, Resource), Pid).
+bind(Tcp) -> bind([], Tcp).
+bind(Resource, Tcp) -> StanzaId = generate_stanza_id(),
+	send_request(StanzaId, ?XmppBind(StanzaId, Resource), Tcp).
 
-establish_session(ToJid, Pid) -> StanzaId = generate_stanza_id(),
-	send_request(StanzaId, ?XmppSession(StanzaId, ToJid), Pid).
+establish_session(ToJid, Tcp) -> StanzaId = generate_stanza_id(),
+	send_request(StanzaId, ?XmppSession(StanzaId, ToJid), Tcp).
 
-roster_get(FromJid, Pid) -> StanzaId = generate_stanza_id(),
-	send_request(StanzaId, ?XmppRosterGet(StanzaId, FromJid), Pid).
+roster_get(FromJid, Tcp) -> StanzaId = generate_stanza_id(),
+	send_request(StanzaId, ?XmppRosterGet(StanzaId, FromJid), Tcp).
 
-roster_set(FromJid, {Jid, Name, Subscription, Groups}, Pid) ->
+roster_set(FromJid, {Jid, Name, Subscription, Groups}, Tcp) ->
 	StanzaId = generate_stanza_id(),
 	send_request(StanzaId, ?XmppRosterSet(StanzaId, FromJid,
-		Jid, Name, Subscription, Groups), Pid).
+		Jid, Name, Subscription, Groups), Tcp).
 
-send_presence(Pid) -> send_request_async(?XmppPresence([], [], []), Pid).
-send_presence(ToJid, Type, Pid) -> StanzaId = generate_stanza_id(),
-	send_request_async(?XmppPresence(StanzaId, ToJid, Type), Pid).
+send_presence(Tcp) -> send_request_async(?XmppPresence([], [], []), Tcp).
+send_presence(ToJid, Type, Tcp) -> StanzaId = generate_stanza_id(),
+	send_request_async(?XmppPresence(StanzaId, ToJid, Type), Tcp).
 
-send_message(FromJid, ToJid, Body, Pid) -> StanzaId = generate_stanza_id(),
-	send_request_async(?XmppMessage(StanzaId, FromJid, ToJid, Body), Pid).
+send_message(FromJid, ToJid, Body, Tcp) -> StanzaId = generate_stanza_id(),
+	send_request_async(?XmppMessage(StanzaId, FromJid, ToJid, Body), Tcp).
 
-request_vcard(FromJid, ToJid, Pid) -> StanzaId = generate_stanza_id(),
-	send_request(StanzaId, ?XepVCard(StanzaId, FromJid, ToJid), Pid).
+request_vcard(FromJid, ToJid, Tcp) -> StanzaId = generate_stanza_id(),
+	send_request(StanzaId, ?XepVCard(StanzaId, FromJid, ToJid), Tcp).
 
-send_stanza_result(StanzaId, FromJid, Pid) ->
-	send_request(StanzaId, ?XmppStanzaResult(StanzaId, FromJid), Pid).
+send_stanza_result(StanzaId, FromJid, Tcp) ->
+	send_request(StanzaId, ?XmppStanzaResult(StanzaId, FromJid), Tcp).
 
-send_raw_xml(Xml, Pid) -> send_request_async(Xml, Pid).
+send_raw_xml(Xml, Tcp) -> send_request_async(Xml, Tcp).
 
-init_dispatcher({ok, Tcp}) -> xmpp_dispatcher:init(Tcp);
-init_dispatcher(Error) -> Error.
+send_request(Data, Tcp) -> send_request(false, Data, Tcp).
+send_request(StanzaId, Data, Tcp) ->
+	xmpp_transport:request(StanzaId, Data, Tcp).
 
-send_request(Data, Pid) -> send_request(false, Data, Pid).
-send_request(StanzaId, Data, Pid) ->
-	xmpp_dispatcher:enqueue(request, [StanzaId, Data], Pid).
-
-send_request_async(Data, Pid) ->
-	xmpp_dispatcher:enqueue(request_async, [Data], Pid).
+send_request_async(Data, Tcp) -> xmpp_transport:request_async(Data, Tcp).
 
 generate_stanza_id() -> utils_crypto:generate_nonce(?StanzaIDFormat).

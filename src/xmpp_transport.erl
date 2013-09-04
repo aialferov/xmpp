@@ -9,9 +9,12 @@
 
 -export([connect/1, connect/2, connect_tls/1, close/1]).
 
--export([request/3, response/2]).
+-export([request/3, request_async/2, response/2]).
 -export([send/2, wait/1, read/3]).
 
+-export([push_stanza/1]).
+
+-export([set_active/2]).
 -export([tcp_dispatch/2]).
 
 -export([socket/1]).
@@ -19,13 +22,14 @@
 
 -include_lib("kernel/include/inet.hrl").
 
--record(tcp, {socket, module, proto, closed, error, port}).
+-record(tcp, {socket, module, inet_module, proto, closed, error, port}).
 
 -define(SrvRrService, "xmpp-client").
 -define(SrvRrProto, "tcp").
 -define(SrvRr, "_" ++ ?SrvRrService ++ "._" ++ ?SrvRrProto ++ ".").
 
--define(ConnectOptions, []).
+-define(ConnectOptions, [{active, false}]).
+-define(ActiveOptions(Active), [{active, Active}]).
 
 connect(HostName, Port) ->
 	make_tcp(gen_tcp:connect(HostName, Port, ?ConnectOptions)).
@@ -50,6 +54,8 @@ close(#tcp{module = Module, socket = Socket}) -> Module:close(Socket).
 request(StanzaId, Data, Tcp) -> case send(Data, Tcp) of
 	ok -> response(StanzaId, Tcp); Error -> Error end.
 
+request_async(Data, Tcp) -> send(Data, Tcp).
+
 response(StanzaId, Tcp) -> case wait(Tcp) of
 	{ok, Data} -> read(StanzaId, Data, Tcp); Error -> Error end.
 
@@ -57,20 +63,25 @@ send(Data, #tcp{module = Module, socket = Socket}) ->
 	io:format("Send: ~p ~p~n", [self(), Data]),
 	Module:send(Socket, Data).
 
-wait(Tcp) -> receive Message -> case tcp_dispatch(Message, Tcp) of
+wait(#tcp{module = Module, socket = Socket}) -> case Module:recv(Socket, 0) of
 	{ok, Data} -> io:format("Wait: ~p ~p~n", [self(), Data]), {ok, Data};
 	Error -> Error
-end end.
+end.
 
 read(StanzaId, Data, Tcp) -> xmpp_result:read(StanzaId,
 	xmpp_reader:read_data(Data, {?MODULE, wait, [Tcp]}), Tcp).
+
+push_stanza(Stanza) -> self() ! {push, Stanza}.
+
+set_active(#tcp{inet_module = Module, socket = Socket}, Active) ->
+	Module:setopts(Socket, ?ActiveOptions(Active)).
 
 tcp_dispatch(Message, #tcp{
 	socket = Socket, proto = Proto,
 	closed = Closed, error = Error
 }) -> case Message of
 	{Proto, Socket, Data} -> {ok, Data};
-	{Closed, Socket} -> {error, closed};
+	{Closed, Socket} -> {ok, closed};
 	{Error, Socket, Reason} -> {error, {Error, Reason}}
 end.
 
@@ -78,12 +89,12 @@ socket(#tcp{socket = Socket}) -> Socket.
 port(#tcp{port = Port}) -> Port.
 
 make_tcp({ok, Socket}) -> {ok, #tcp{
-	socket = Socket, module = gen_tcp, proto = tcp,
+	socket = Socket, module = gen_tcp, inet_module = inet, proto = tcp,
 	closed = tcp_closed, error = tcp_error, port = port(inet, Socket)
 }};
 make_tcp(Error) -> Error.
 make_tls({ok, Socket}) -> {ok, #tcp{
-	socket = Socket, module = ssl, proto = ssl,
+	socket = Socket, module = ssl, inet_module = ssl, proto = ssl,
 	closed = ssl_closed, error = ssl_error, port = port(ssl, Socket)
 }};
 make_tls(Error) -> Error.

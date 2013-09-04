@@ -10,39 +10,32 @@
 
 -include("rfc/xmpp_core_tools.hrl").
 
-read(StanzaId, Response, Tcp) -> read({StanzaId,
-	read_response(StanzaId, Response), Tcp}).
-
-read({StanzaId, {ok, Response}, Tcp}) -> case Response of
-	whitespace ->
-		io:format("~p~n", [Response]),
+read(StanzaId, Response, Tcp) -> case read_response(StanzaId, Response) of
+	{ok, whitespace} -> xmpp_transport:response(StanzaId, Tcp);
+	{ok, {push, Stanza}} ->
+		xmpp_transport:push_stanza(Stanza),
 		xmpp_transport:response(StanzaId, Tcp);
-	{push, _Stanza} ->
-		io:format("~p~n", [Response]),
-		xmpp_transport:response(StanzaId, Tcp);
-	{back, Stanza} -> {ok, Stanza};
-	StreamError = #streamError{} -> complete_stream_error(
+	{ok, {back, Stanza}} -> {ok, Stanza};
+	{ok, StreamError = #streamError{}} -> complete_stream_error(
 		handle_stream_error(StreamError, Tcp), Tcp);
-	Response -> {ok, Response}
-end;
-read({_StanzaId, Error, _Tcp}) -> Error.
+	Other -> Other
+end.
 
 read_response(StanzaId, {ok, Stanza = #stanza{
 	attributes = #stanzaAttributes{id = StanzaId}}}) -> {ok, {back, Stanza}};
 read_response(_StanzaId, {ok, Stanza = #stanza{}}) -> {ok, {push, Stanza}};
 read_response(_StanzaId, Response) -> Response.
 
-complete_stream_error(StreamError, Tcp) -> complete_stream_error(
-	StreamError, Tcp, xmpp_transport:response(false, Tcp)).
-
-complete_stream_error(StreamError, Tcp, Response) -> case Response of
-	{ok, stream_closed} -> complete_stream_error(StreamError, Tcp);
-	{error, closed} -> {ok, StreamError};
-	Error -> Error
-end.
+complete_stream_error(StreamError, Tcp) ->
+	case xmpp_transport:response(false, Tcp) of
+		{ok, stream_closed} -> complete_stream_error(StreamError, Tcp);
+		{error, closed} -> {ok, StreamError};
+		Error -> Error
+	end.
 
 handle_stream_error(Se = #streamError{condition =
 	C = #condition{name = 'see-other-host', value = {HostName, Port}}}, Tcp)
 -> 
 	Se#streamError{condition = C#condition{value = {HostName,
-		case Port of 0 -> xmpp_transport:port(Tcp); Port -> Port end}}}.
+		case Port of 0 -> xmpp_transport:port(Tcp); Port -> Port end}}};
+handle_stream_error(Error, _Tcp) -> Error.
