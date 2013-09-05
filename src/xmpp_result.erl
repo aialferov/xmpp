@@ -15,14 +15,13 @@ read(StanzaId, Response, Tcp) -> case read_response(StanzaId, Response) of
 	{ok, {push, Stanza}} ->
 		xmpp_transport:push_stanza(Stanza),
 		xmpp_transport:response(StanzaId, Tcp);
-	{ok, {back, Stanza}} -> {ok, Stanza};
 	{ok, StreamError = #streamError{}} -> complete_stream_error(
 		handle_stream_error(StreamError, Tcp), Tcp);
 	Other -> Other
 end.
 
 read_response(StanzaId, {ok, Stanza = #stanza{
-	attributes = #stanzaAttributes{id = StanzaId}}}) -> {ok, {back, Stanza}};
+	attributes = #stanzaAttributes{id = StanzaId}}}) -> {ok, Stanza};
 read_response(_StanzaId, {ok, Stanza = #stanza{}}) -> {ok, {push, Stanza}};
 read_response(_StanzaId, Response) -> Response.
 
