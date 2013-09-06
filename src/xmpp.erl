@@ -10,6 +10,9 @@
 -export([login/2, login/3]).
 -export([logout/1]).
 
+-export([send_presence/3]).
+-export([send_message/4]).
+
 -export([read/2]).
 
 -include("xmpp.hrl").
@@ -39,6 +42,12 @@ logout(Tcp) ->
 	xmpp_transport:set_active(Tcp, false),
 	xmpp_gate:close_stream(Tcp).
 
+send_presence(ToJid, Type, Tcp) -> xmpp_gate:send_presence(ToJid, Type, Tcp).
+
+send_message(FromJid, ToJid, Body, Tcp) ->
+	xmpp_gate:send_message(FromJid, ToJid, Body, Tcp).
+
+read({push, Stanza}, _Tcp) -> {push, Stanza};
 read(Message, Tcp) -> result(utils_monad:do([
 	?Function(dispatch, fun xmpp_transport:tcp_dispatch/2, [Message, Tcp]),
 	?Function(log, fun io:format/2, ["Read: ~p~n", [?Placeholder(dispatch)]]),
