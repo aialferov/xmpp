@@ -81,7 +81,7 @@ tcp_dispatch(Message, #tcp{
 	closed = Closed, error = Error
 }) -> case Message of
 	{Proto, Socket, Data} -> {ok, Data};
-	{Closed, Socket} -> {ok, closed};
+	{Closed, Socket} -> {error, closed};
 	{Error, Socket, Reason} -> {error, {Error, Reason}}
 end.
 
