@@ -20,16 +20,20 @@
 
 -include("../src/rfc/xmpp_core_tools.hrl").
 
--record(auth, {oauth, user_name, password}).
+-record(auth, {type, oauth, user_name, password}).
 
--define(Mechanisms, [
-	"OAUTH",
-	"X-OAUTH2",
-	"X-FACEBOOK-PLATFORM",
-	"X-MESSENGER-OAUTH2",
-	"DIGEST-MD5",
-	"PLAIN"
-]).
+-define(Mechanisms(Type), case Type of
+	oauth -> [
+		"OAUTH",
+		"X-OAUTH2",
+		"X-FACEBOOK-PLATFORM",
+		"X-MESSENGER-OAUTH2"
+	];
+	name_pass -> [
+		"DIGEST-MD5",
+		"PLAIN"
+	]
+end).
 
 -define(DigestMd5Config, #digest_md5_config{
 	qop = "auth", charset = "utf-8", serv_type = "xmpp"}).
@@ -37,9 +41,9 @@
 -define(XmppStreamError(Name, Value), #streamError{
 	condition = #condition{name = Name, value = Value}}).
 
-make_auth(OAuth) -> #auth{oauth = OAuth}.
-make_auth(UserName, Password) ->
-	#auth{user_name = UserName, password = Password}.
+make_auth(OAuth) -> #auth{type = oauth, oauth = OAuth}.
+make_auth(UserName, Password) -> #auth{type = name_pass,
+	user_name = UserName, password = Password}.
 
 %negotiate(Network, Auth, Tcp) -> negotiate(Network, Auth, Tcp,
 %	xmpp_request:open_stream(?HostName(Network), Tcp)).
@@ -88,58 +92,56 @@ feature_fun(Network, _Auth, Tcp, Feature) -> {Name, Args} = case Feature of
 	session -> {fun xmpp_request:establish_session/2,
 		[?HostName(Network), Tcp]};
 	Feature -> {fun() -> {ok, not_supported} end, []}
-end, #function{id = Feature, name = Name, args = Args}.
+end, ?Function(Feature, Name, Args).
 
 negotiation_funs(_Network, _Auth, _Tcp,
 	?XmppStreamError('see-other-host', {HostName, Port}))
 -> [
-	#function{id = see_other_host,
-		name = fun xmpp_request:connect/2, args = [HostName, Port]}
+	?Function(see_other_host, fun xmpp_request:connect/2, [HostName, Port])
 ];
 
 negotiation_funs(_Network, _Auth, _Tcp, ?XmppStreamError(Name, Value)) -> [
-	#function{id = e, name = fun() -> {error, {Name, Value}} end, args = []}
+	?Function(stream_error, fun() -> {error, {Name, Value}} end, [])
 ];
 
 negotiation_funs(_Network, _Auth, Tcp, {features, [Tls|_]})
 	when Tls == start_tls; Tls == {start_tls, required}
 -> [
-	#function{id = s, name = fun xmpp_request:start_tls/1, args = [Tcp]},
-	#function{id = tls, name = fun xmpp_request:connect_tls/1, args = [Tcp]}
+	?Function(start_tls, fun xmpp_request:start_tls/1, [Tcp]),
+	?Function(tls, fun xmpp_request:connect_tls/1, [Tcp])
 ];
 
 negotiation_funs(Network, Auth, Tcp,
 	{features, [{mechanisms, Mechanisms}|_]})
 -> [
-	#function{id = mechanisms, name = fun negotiate/4, args = [
-		Network, Auth, Tcp, mechanism(Mechanisms)]}
+	?Function(mechanisms, fun negotiate/4,
+		[Network, Auth, Tcp, mechanism(Mechanisms, Auth)])
 ];
 
 negotiation_funs(Network, Auth, Tcp, {features, Features}) -> [
-	#function{id = features, name = fun negotiate_features/4,
-		args = [Network, Auth, Tcp, Features]}
+	?Function(features, fun negotiate_features/4,
+		[Network, Auth, Tcp, Features])
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "OAUTH") -> [
-	#function{id = sasl, name = fun xmpp_request:begin_sasl/3, args = [
-		Mechanism, utils_sasl:plain_message("=", access_token(Auth)), Tcp]}
-%		Mechanism, access_token(Auth), Tcp]}
+	?Function(sasl, fun xmpp_request:begin_sasl/3,
+		[Mechanism, access_token(Auth), Tcp])
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-OAUTH2") -> [
-	#function{id = sasl, name = fun xmpp_request:begin_sasl/3, args = [
-		Mechanism, utils_sasl:plain_message("=", access_token(Auth)), Tcp]}
+	?Function(sasl, fun xmpp_request:begin_sasl/3,
+		[Mechanism, utils_sasl:plain_message("=", access_token(Auth)), Tcp])
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-MESSENGER-OAUTH2") -> [
-	#function{id = sasl, name = fun xmpp_request:begin_sasl/3,
-		args = [Mechanism, access_token(Auth), Tcp]}
+	?Function(sasl, fun xmpp_request:begin_sasl/3,
+		[Mechanism, access_token(Auth), Tcp])
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-FACEBOOK-PLATFORM") -> [
-	#function{id = b, name = fun xmpp_request:begin_sasl/3,
-		args = [Mechanism, "=", Tcp]},
-	#function{id = sasl, name = fun({sasl_challenge, Challenge}) ->
+	?Function(begin_sasl, fun xmpp_request:begin_sasl/3,
+		[Mechanism, "=", Tcp]),
+	?Function(sasl, fun({sasl_challenge, Challenge}) ->
 		Q = utils_http:read_query(binary_to_list(base64:decode(Challenge))),
 		xmpp_request:send_sasl_response(
 			binary_to_list(base64:encode(utils_http:query_string([
@@ -151,33 +153,31 @@ negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-FACEBOOK-PLATFORM") -> [
 				{"v", "1.0"}
 			]))),
 		Tcp)
-	end, args = [#placeholder{id = b}]}
+	end, [?Placeholder(begin_sasl)])
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "PLAIN") -> [
-	#function{id = begin_sasl, name = fun xmpp_request:begin_sasl/3,
-		args = [Mechanism, utils_sasl:plain_message(
-			user_name(Auth), password(Auth)), Tcp]
-	}
+	?Function(sasl, fun xmpp_request:begin_sasl/3, [Mechanism,
+		utils_sasl:plain_message(user_name(Auth), password(Auth)), Tcp])
 ];
 
 negotiation_funs(Network, Auth, Tcp, Mechanism = "DIGEST-MD5") -> [
-	#function{id = b, name = fun xmpp_request:begin_sasl/3,
-		args = [Mechanism, "=", Tcp]},
-	#function{id = r1, name = fun({sasl_challenge, Challenge}) ->
+	?Function(begin_sasl, fun xmpp_request:begin_sasl/3,
+		[Mechanism, "=", Tcp]),
+	?Function(sasl_challenge, fun({sasl_challenge, Challenge}) ->
 		xmpp_request:send_sasl_response(utils_sasl:digest_md5_response(
 			user_name(Auth), password(Auth), ?HostName(Network),
 			Challenge, ?DigestMd5Config
 		), Tcp)
-	end, args = [#placeholder{id = b}]},
-	#function{id = r2, name = fun xmpp_request:send_sasl_response/2,
-		args = ["", Tcp]}
+	end, [?Placeholder(begin_sasl)]),
+	?Function(sasl, fun xmpp_request:send_sasl_response/2, ["", Tcp])
 ].
 
-mechanism(Mechanisms) -> mechanism(Mechanisms, ?Mechanisms).
-mechanism(Mechanisms, [H|T]) -> case lists:member(H, Mechanisms) of
-	true -> {ok, H}; false -> mechanism(Mechanisms, T) end;
-mechanism(_Mechanisms, []) -> {error, no_supported_mechanism}.
+mechanism(Mechanisms, #auth{type = Type}) ->
+	mechanism({Mechanisms, ?Mechanisms(Type)}).
+mechanism({Mechanisms, [H|T]}) -> case lists:member(H, Mechanisms) of
+	true -> {ok, H}; false -> mechanism({Mechanisms, T}) end;
+mechanism({_Mechanisms, []}) -> {error, no_supported_mechanism}.
 
 jid(Features) -> case lists:keyfind(bind, #result.id, Features) of
 	#result{data = #stanza{content = Jid}} -> {ok, Jid}; 
