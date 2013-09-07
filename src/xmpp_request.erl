@@ -5,7 +5,7 @@
 %%% Created : 13 Sep 2012 by Anton I Alferov <casper@ubca-dp>
 %%%-------------------------------------------------------------------
 
--module(xmpp_gate).
+-module(xmpp_request).
 
 -export([connect/2, connect/1, connect_tls/1, close/1]).
 -export([open_stream/2, open_stream/3, close_stream/1]).

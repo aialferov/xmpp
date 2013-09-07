@@ -23,15 +23,15 @@ login(Network, UserName, Password) ->
 	login({Network, xmpp_auth:make_auth(UserName, Password)}).
 
 login({Network, Auth}) -> result(utils_monad:do([
-	?Function(connect, fun xmpp_gate:connect/1, [?HostName(Network)]),
+	?Function(connect, fun xmpp_request:connect/1, [?HostName(Network)]),
 	?Function(negotiate, fun xmpp_auth:negotiate/3,
 		[Network, Auth, ?Placeholder(connect)]),
 	?Function(tcp, fun tcp/1, [?Placeholder(negotiate)]),
 	?Function(features, fun features/1, [?Placeholder(negotiate)]),
 	?Function(jid, fun xmpp_auth:jid/1, [?Placeholder(features)]),
-	?Function(roster, fun xmpp_gate:roster_get/2,
+	?Function(roster, fun xmpp_request:roster_get/2,
 		[?Placeholder(jid), ?Placeholder(tcp)]),
-	?Function(presence, fun xmpp_gate:send_presence/1, [?Placeholder(tcp)]),
+	?Function(presence, fun xmpp_request:send_presence/1, [?Placeholder(tcp)]),
 	?Function(active_once, fun xmpp_transport:set_active/2,
 		[?Placeholder(tcp), once]),
 	?Function(result, fun(Jid, Roster, Tcp) -> {ok, {Jid, Roster, Tcp}} end,
@@ -40,12 +40,13 @@ login({Network, Auth}) -> result(utils_monad:do([
 
 logout(Tcp) ->
 	xmpp_transport:set_active(Tcp, false),
-	xmpp_gate:close_stream(Tcp).
+	xmpp_request:close_stream(Tcp).
 
-send_presence(ToJid, Type, Tcp) -> xmpp_gate:send_presence(ToJid, Type, Tcp).
+send_presence(ToJid, Type, Tcp) ->
+	xmpp_request:send_presence(ToJid, Type, Tcp).
 
 send_message(FromJid, ToJid, Body, Tcp) ->
-	xmpp_gate:send_message(FromJid, ToJid, Body, Tcp).
+	xmpp_request:send_message(FromJid, ToJid, Body, Tcp).
 
 read({push, Stanza}, _Tcp) -> {push, Stanza};
 read(Message, Tcp) -> result(utils_monad:do([

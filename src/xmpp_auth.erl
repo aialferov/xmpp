@@ -42,21 +42,21 @@ make_auth(UserName, Password) ->
 	#auth{user_name = UserName, password = Password}.
 
 %negotiate(Network, Auth, Tcp) -> negotiate(Network, Auth, Tcp,
-%	xmpp_gate:open_stream(?HostName(Network), Tcp)).
+%	xmpp_request:open_stream(?HostName(Network), Tcp)).
 %
 %login({Network, Auth}) ->
-%	{ok, Tcp} = xmpp_gate:connect(?HostName(Network)),
+%	{ok, Tcp} = xmpp_request:connect(?HostName(Network)),
 %	{ok, {tls, Tls}} = negotiate(Network, Auth, Tcp),
 %	{ok, {see_other_host, Tcp1}} = negotiate(Network, Auth, Tls),
 %	{ok, {tls, Tls1}} = negotiate(Network, Auth, Tcp1),
 %	{ok, {mechanisms, sasl_success}} = negotiate(Network, Auth, Tls1),
 %	{ok, {features, Features}} = negotiate(Network, Auth, Tls1),
 %	{ok, Jid} = jid(Features),
-%	xmpp_gate:roster_get(Jid, Tls1),
+%	xmpp_request:roster_get(Jid, Tls1),
 %	xmpp_transport:set_active(Tls1, true);
 
 negotiate(Network, Auth, Tcp) -> negotiate({Network, Auth, Tcp}, negotiate(
-	Network, Auth, Tcp, xmpp_gate:open_stream(?HostName(Network), Tcp))).
+	Network, Auth, Tcp, xmpp_request:open_stream(?HostName(Network), Tcp))).
 
 negotiate({Network, Auth, Tcp}, Result) -> case Result of
 	{ok, {tls, Tls}} -> negotiate(Network, Auth, Tls);
@@ -84,8 +84,9 @@ negotiate_features(Results = [#result{}|_]) -> {ok, Results};
 negotiate_features(Results = [#error{}|_]) -> {error, Results}.
 
 feature_fun(Network, _Auth, Tcp, Feature) -> {Name, Args} = case Feature of
-	bind -> {fun xmpp_gate:bind/1, [Tcp]};
-	session -> {fun xmpp_gate:establish_session/2, [?HostName(Network), Tcp]};
+	bind -> {fun xmpp_request:bind/1, [Tcp]};
+	session -> {fun xmpp_request:establish_session/2,
+		[?HostName(Network), Tcp]};
 	Feature -> {fun() -> {ok, not_supported} end, []}
 end, #function{id = Feature, name = Name, args = Args}.
 
@@ -93,7 +94,7 @@ negotiation_funs(_Network, _Auth, _Tcp,
 	?XmppStreamError('see-other-host', {HostName, Port}))
 -> [
 	#function{id = see_other_host,
-		name = fun xmpp_gate:connect/2, args = [HostName, Port]}
+		name = fun xmpp_request:connect/2, args = [HostName, Port]}
 ];
 
 negotiation_funs(_Network, _Auth, _Tcp, ?XmppStreamError(Name, Value)) -> [
@@ -103,8 +104,8 @@ negotiation_funs(_Network, _Auth, _Tcp, ?XmppStreamError(Name, Value)) -> [
 negotiation_funs(_Network, _Auth, Tcp, {features, [Tls|_]})
 	when Tls == start_tls; Tls == {start_tls, required}
 -> [
-	#function{id = s, name = fun xmpp_gate:start_tls/1, args = [Tcp]},
-	#function{id = tls, name = fun xmpp_gate:connect_tls/1, args = [Tcp]}
+	#function{id = s, name = fun xmpp_request:start_tls/1, args = [Tcp]},
+	#function{id = tls, name = fun xmpp_request:connect_tls/1, args = [Tcp]}
 ];
 
 negotiation_funs(Network, Auth, Tcp,
@@ -120,27 +121,27 @@ negotiation_funs(Network, Auth, Tcp, {features, Features}) -> [
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "OAUTH") -> [
-	#function{id = sasl, name = fun xmpp_gate:begin_sasl/3, args = [
+	#function{id = sasl, name = fun xmpp_request:begin_sasl/3, args = [
 		Mechanism, utils_sasl:plain_message("=", access_token(Auth)), Tcp]}
 %		Mechanism, access_token(Auth), Tcp]}
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-OAUTH2") -> [
-	#function{id = sasl, name = fun xmpp_gate:begin_sasl/3, args = [
+	#function{id = sasl, name = fun xmpp_request:begin_sasl/3, args = [
 		Mechanism, utils_sasl:plain_message("=", access_token(Auth)), Tcp]}
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-MESSENGER-OAUTH2") -> [
-	#function{id = sasl, name = fun xmpp_gate:begin_sasl/3,
+	#function{id = sasl, name = fun xmpp_request:begin_sasl/3,
 		args = [Mechanism, access_token(Auth), Tcp]}
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-FACEBOOK-PLATFORM") -> [
-	#function{id = b, name = fun xmpp_gate:begin_sasl/3,
+	#function{id = b, name = fun xmpp_request:begin_sasl/3,
 		args = [Mechanism, "=", Tcp]},
 	#function{id = sasl, name = fun({sasl_challenge, Challenge}) ->
 		Q = utils_http:read_query(binary_to_list(base64:decode(Challenge))),
-		xmpp_gate:send_sasl_response(
+		xmpp_request:send_sasl_response(
 			binary_to_list(base64:encode(utils_http:query_string([
 				{"nonce", utils_lists:keyfind2("nonce", Q)},
 				{"method", utils_lists:keyfind2("method", Q)},
@@ -154,22 +155,22 @@ negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-FACEBOOK-PLATFORM") -> [
 ];
 
 negotiation_funs(_Network, Auth, Tcp, Mechanism = "PLAIN") -> [
-	#function{id = begin_sasl, name = fun xmpp_gate:begin_sasl/3,
+	#function{id = begin_sasl, name = fun xmpp_request:begin_sasl/3,
 		args = [Mechanism, utils_sasl:plain_message(
 			user_name(Auth), password(Auth)), Tcp]
 	}
 ];
 
 negotiation_funs(Network, Auth, Tcp, Mechanism = "DIGEST-MD5") -> [
-	#function{id = b, name = fun xmpp_gate:begin_sasl/3,
+	#function{id = b, name = fun xmpp_request:begin_sasl/3,
 		args = [Mechanism, "=", Tcp]},
 	#function{id = r1, name = fun({sasl_challenge, Challenge}) ->
-		xmpp_gate:send_sasl_response(utils_sasl:digest_md5_response(
+		xmpp_request:send_sasl_response(utils_sasl:digest_md5_response(
 			user_name(Auth), password(Auth), ?HostName(Network),
 			Challenge, ?DigestMd5Config
 		), Tcp)
 	end, args = [#placeholder{id = b}]},
-	#function{id = r2, name = fun xmpp_gate:send_sasl_response/2,
+	#function{id = r2, name = fun xmpp_request:send_sasl_response/2,
 		args = ["", Tcp]}
 ].
 

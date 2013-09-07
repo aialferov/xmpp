@@ -8,9 +8,12 @@
 	{description, "XMPP client"},
 	{modules, [
 		xmpp,
-		xmpp_gate,
-		xmpp_reader
+		xmpp_auth,
+		xmpp_reader,
+		xmpp_result,
+		xmpp_request,
+		xmpp_transport
 	]},
 	{registered, []},
-	{applications, [kernel, stdlib, ssl, inets, utils]}
+	{applications, [kernel, stdlib, ssl, inets, utils, oauth2]}
 ]}.
