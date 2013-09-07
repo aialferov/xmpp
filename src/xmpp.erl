@@ -7,6 +7,8 @@
 
 -module(xmpp).
 
+-export([start/0, stop/0]).
+
 -export([login/2, login/3]).
 -export([logout/1]).
 
@@ -17,6 +19,9 @@
 
 -include("xmpp.hrl").
 -include("utils_monad.hrl").
+
+start() -> application:start(?MODULE).
+stop() -> application:stop(?MODULE).
 
 login(Network, OAuth) -> login({Network, xmpp_auth:make_auth(OAuth)}).
 login(Network, UserName, Password) ->
