@@ -32,7 +32,8 @@ read_data(Data, MoreDataMfa) ->
 			{Document, _Rest} = xmerl_scan:string(Data, [
 				{continuation_fun, fun more_data/3,
 					{MoreDataMfa, list_to_atom(ElementName)}},
-				{hook_fun, fun switch_hook_state/2}
+				{hook_fun, fun switch_hook_state/2},
+				{encoding, l1}
 			]),
 			{ok, build_response(Document)};
 		{error, incomplete} -> case wait_more_data(MoreDataMfa) of
