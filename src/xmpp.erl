@@ -56,7 +56,8 @@ send_message(FromJid, ToJid, Body, Tcp) ->
 read({push, Stanza}, _Tcp) -> {push, Stanza};
 read(Message, Tcp) -> result(utils_monad:do([
 	?Function(dispatch, fun xmpp_transport:tcp_dispatch/2, [Message, Tcp]),
-	?Function(log, fun io:format/2, ["Read: ~p~n", [?Placeholder(dispatch)]]),
+	?Function(log, fun(Result) -> io:format("Read: ~p~n", [Result]) end,
+		[?Placeholder(dispatch)]),
 	?Function(active_false, fun xmpp_transport:set_active/2, [Tcp, false]),
 	?Function(read, fun xmpp_reader:read_data/2,
 		[?Placeholder(dispatch), {xmpp_transport, wait, [Tcp]}]),
