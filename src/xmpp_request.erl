@@ -26,12 +26,12 @@
 
 -include("xmpp_utils.hrl").
 
--include("rfc/xmpp_core.hrl").
+-include("xmpp_core.hrl").
 
--include("rfc/xmpp_im.hrl").
--include("rfc/xmpp_im_obsolete.hrl").
+-include("xmpp_im.hrl").
+-include("xmpp_im_obsolete.hrl").
 
--include("xep/vcard_temp.hrl").
+-include("xmpp_vcard_temp.hrl").
 
 -define(StanzaIDFormat, [4]).
 

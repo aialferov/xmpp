@@ -12,17 +12,17 @@
 
 -include("xmpp_utils.hrl").
 
--include("rfc/xmpp_core.hrl").
--include("rfc/xmpp_core_tools.hrl").
+-include("xmpp_core.hrl").
+-include("xmpp_core_tools.hrl").
 
--include("rfc/xmpp_im.hrl").
--include("rfc/xmpp_im_tools.hrl").
+-include("xmpp_im.hrl").
+-include("xmpp_im_tools.hrl").
 
--include("rfc/xmpp_im_obsolete.hrl").
+-include("xmpp_im_obsolete.hrl").
 
--include("xep/ping.hrl").
--include("xep/vcard_temp.hrl").
--include("xep/vcard_temp_tools.hrl").
+-include("xmpp_ping.hrl").
+-include("xmpp_vcard_temp.hrl").
+-include("xmpp_vcard_temp_tools.hrl").
 
 read_data(Data, MoreDataMfa) ->
 	case gather_tag(Data) of

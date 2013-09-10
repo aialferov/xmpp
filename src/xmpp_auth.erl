@@ -11,14 +11,13 @@
 -export([negotiate/3]).
 -export([jid/1]).
 
--include("xmpp.hrl").
-
 -include("oauth2.hrl").
 
 -include("utils_sasl.hrl").
 -include("utils_monad.hrl").
 
--include("../src/rfc/xmpp_core_tools.hrl").
+-include("xmpp_config.hrl").
+-include("xmpp_core_tools.hrl").
 
 -record(auth, {type, oauth, user_name, password}).
 
@@ -44,20 +43,6 @@ end).
 make_auth(OAuth) -> #auth{type = oauth, oauth = OAuth}.
 make_auth(UserName, Password) -> #auth{type = name_pass,
 	user_name = UserName, password = Password}.
-
-%negotiate(Network, Auth, Tcp) -> negotiate(Network, Auth, Tcp,
-%	xmpp_request:open_stream(?HostName(Network), Tcp)).
-%
-%login({Network, Auth}) ->
-%	{ok, Tcp} = xmpp_request:connect(?HostName(Network)),
-%	{ok, {tls, Tls}} = negotiate(Network, Auth, Tcp),
-%	{ok, {see_other_host, Tcp1}} = negotiate(Network, Auth, Tls),
-%	{ok, {tls, Tls1}} = negotiate(Network, Auth, Tcp1),
-%	{ok, {mechanisms, sasl_success}} = negotiate(Network, Auth, Tls1),
-%	{ok, {features, Features}} = negotiate(Network, Auth, Tls1),
-%	{ok, Jid} = jid(Features),
-%	xmpp_request:roster_get(Jid, Tls1),
-%	xmpp_transport:set_active(Tls1, true);
 
 negotiate(Network, Auth, Tcp) -> negotiate({Network, Auth, Tcp}, negotiate(
 	Network, Auth, Tcp, xmpp_request:open_stream(?HostName(Network), Tcp))).

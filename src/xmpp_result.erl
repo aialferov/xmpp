@@ -8,7 +8,7 @@
 -module(xmpp_result).
 -export([read/3]).
 
--include("rfc/xmpp_core_tools.hrl").
+-include("xmpp_core_tools.hrl").
 
 read(StanzaId, Response, Tcp) -> case read_response(StanzaId, Response) of
 	{ok, whitespace} -> xmpp_transport:response(StanzaId, Tcp);

@@ -15,10 +15,11 @@
 -export([send_presence/3]).
 -export([send_message/4]).
 
--export([read/2]).
+-export([handle_notification/2]).
 
--include("xmpp.hrl").
 -include("utils_monad.hrl").
+
+-include("xmpp_config.hrl").
 
 start() -> application:start(?MODULE).
 stop() -> application:stop(?MODULE).
@@ -53,9 +54,10 @@ send_presence(ToJid, Type, Tcp) ->
 send_message(FromJid, ToJid, Body, Tcp) ->
 	xmpp_request:send_message(FromJid, ToJid, Body, Tcp).
 
-read({push, Stanza}, _Tcp) -> {push, Stanza};
-read(Message, Tcp) -> result(utils_monad:do([
-	?Function(dispatch, fun xmpp_transport:tcp_dispatch/2, [Message, Tcp]),
+handle_notification({push, Stanza}, _Tcp) -> {ok, Stanza};
+handle_notification(Notification, Tcp) -> result(utils_monad:do([
+	?Function(dispatch, fun xmpp_transport:tcp_dispatch/2,
+		[Notification, Tcp]),
 	?Function(log, fun(Result) -> io:format("Read: ~p~n", [Result]) end,
 		[?Placeholder(dispatch)]),
 	?Function(active_false, fun xmpp_transport:set_active/2, [Tcp, false]),
