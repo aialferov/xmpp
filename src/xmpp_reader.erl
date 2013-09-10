@@ -21,8 +21,12 @@
 -include("xmpp_im_obsolete.hrl").
 
 -include("xmpp_ping.hrl").
+
 -include("xmpp_vcard_temp.hrl").
 -include("xmpp_vcard_temp_tools.hrl").
+
+-include("xmpp_chat_state_notifications.hrl").
+-include("xmpp_chat_state_notifications_tools.hrl").
 
 read_data(Data, MoreDataMfa) ->
 	case gather_tag(Data) of
@@ -181,10 +185,12 @@ read_presence(Presence) -> lists:foldl(fun
 end, #presence{}, Presence).
 
 read_message(Message) -> lists:foldl(fun
-	(#xmlElement{name = Name, content = Value}, OldMessage) -> case Name of
-		subject -> OldMessage#message{subject = read_text(Value)};
-		body -> OldMessage#message{body = read_text(Value)};
-		_ -> OldMessage
+	(?XepChatStateNotification(Type), Acc) -> Acc#message{extensions =
+		[#chat_state_notification{type = Type}|Acc#message.extensions]};
+	(#xmlElement{name = Name, content = Value}, Acc) -> case Name of
+		subject -> Acc#message{subject = read_text(Value)};
+		body -> Acc#message{body = read_text(Value)};
+		_ -> Acc
 	end
 end, #message{}, Message).
 

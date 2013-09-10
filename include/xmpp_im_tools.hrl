@@ -7,4 +7,4 @@
 
 -record(rosterItem, {jid = "", name = "", subscription = "none", ask = ""}).
 -record(presence, {show = "", status = [], priority = 0}).
--record(message, {subject, body}).
+-record(message, {subject, body, extensions = []}).
