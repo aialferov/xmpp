@@ -8,6 +8,7 @@
 	{description, "XMPP client"},
 	{modules, [
 		xmpp,
+		xmpp_jid,
 		xmpp_auth,
 		xmpp_reader,
 		xmpp_result,
