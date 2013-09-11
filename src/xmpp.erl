@@ -22,8 +22,13 @@
 -include("xmpp_config.hrl").
 -include("xmpp_core_tools.hrl").
 
--define(Ping(Id, FromJid), #stanza{stanza = iq, attributes =
-	#stanzaAttributes{id = Id, from = FromJid}, content = ping}).
+-define(Stanza(Id, FromJid, Type, Content), #stanza{
+	stanza = iq, content = Content, attributes =
+		#stanzaAttributes{id = Id, from = FromJid, type = Type}
+}).
+
+-define(Ping(Id, FromJid), ?Stanza(Id, FromJid, _Type, ping)).
+-define(UnsupportedGet(Id, FromJid), ?Stanza(Id, FromJid, "get", _Content)).
 
 start() -> application:start(?MODULE).
 stop() -> application:stop(?MODULE).
@@ -61,6 +66,8 @@ send_message(FromJid, ToJid, Body, Tcp) ->
 handle_info(Info, Jid, Tcp) -> case read_info(Info, Tcp) of
 	{ok, ?Ping(Id, FromJid)} ->
 		xmpp_request:send_stanza_result(Id, Jid, FromJid, Tcp);
+	{ok, ?UnsupportedGet(Id, FromJid)} -> xmpp_request:send_stanza_error(
+		Id, Jid, FromJid, cancel, 'feature-not-implemented', Tcp);
 	Other -> Other
 end.
 
