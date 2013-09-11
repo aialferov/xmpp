@@ -15,6 +15,8 @@
 -export([send_presence/3]).
 -export([send_message/4]).
 
+-export([request_vcard/3]).
+
 -export([handle_info/3]).
 
 -include("utils_monad.hrl").
@@ -62,6 +64,11 @@ send_presence(ToJid, Type, Tcp) ->
 
 send_message(FromJid, ToJid, Body, Tcp) ->
 	xmpp_request:send_message(FromJid, ToJid, Body, Tcp).
+
+request_vcard(FromJid, ToJid, Tcp) ->
+	xmpp_transport:set_active(Tcp, false),
+	R = xmpp_request:request_vcard(FromJid, ToJid, Tcp),
+	xmpp_transport:set_active(Tcp, once), R.
 
 handle_info(Info, Jid, Tcp) -> case read_info(Info, Tcp) of
 	{ok, ?Ping(Id, FromJid)} ->
