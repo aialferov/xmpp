@@ -6,7 +6,9 @@
 %%%-------------------------------------------------------------------
 
 -module(xmpp_jid).
--compile(export_all).
+
+-export([bare/1]).
+-export([local_part/1, domain_part/1, resource_part/1]).
 
 bare(Jid) -> bare(Jid, []).
 bare("/" ++ _, Acc) -> lists:reverse(Acc);
