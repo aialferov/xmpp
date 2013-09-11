@@ -15,7 +15,7 @@
 -export([send_presence/3]).
 -export([send_message/4]).
 
--export([handle_notification/3]).
+-export([handle_info/3]).
 
 -include("utils_monad.hrl").
 
@@ -58,17 +58,15 @@ send_presence(ToJid, Type, Tcp) ->
 send_message(FromJid, ToJid, Body, Tcp) ->
 	xmpp_request:send_message(FromJid, ToJid, Body, Tcp).
 
-handle_notification(Notification, Jid, Tcp) ->
-	case read_notification(Notification, Tcp) of
-		{ok, ?Ping(Id, FromJid)} ->
-			xmpp_request:send_stanza_result(Id, Jid, FromJid, Tcp);
-		Other -> Other
-	end.
+handle_info(Info, Jid, Tcp) -> case read_info(Info, Tcp) of
+	{ok, ?Ping(Id, FromJid)} ->
+		xmpp_request:send_stanza_result(Id, Jid, FromJid, Tcp);
+	Other -> Other
+end.
 
-read_notification({push, Stanza}, _Tcp) -> {ok, Stanza};
-read_notification(Notification, Tcp) -> result(utils_monad:do([
-	?Function(dispatch, fun xmpp_transport:tcp_dispatch/2,
-		[Notification, Tcp]),
+read_info({push, Stanza}, _Tcp) -> {ok, Stanza};
+read_info(Info, Tcp) -> result(utils_monad:do([
+	?Function(dispatch, fun xmpp_transport:tcp_dispatch/2, [Info, Tcp]),
 	?Function(log, fun(Result) -> io:format("Read: ~p~n", [Result]) end,
 		[?Placeholder(dispatch)]),
 	?Function(active_false, fun xmpp_transport:set_active/2, [Tcp, false]),
