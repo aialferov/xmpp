@@ -12,6 +12,7 @@
 -define(XmppNsTls, "urn:ietf:params:xml:ns:xmpp-tls").
 -define(XmppNsSasl, "urn:ietf:params:xml:ns:xmpp-sasl").
 -define(XmppNsBind, "urn:ietf:params:xml:ns:xmpp-bind").
+-define(XmppNsStanzas, "urn:ietf:params:xml:ns:xmpp-stanzas").
 
 -define(XmppStreamHeader(From, To),
 	"<?xml version='1.0'?>" ++
@@ -38,10 +39,20 @@
 	?XmlEl("bind", [], ?XmppNsBind, ?XmlElSimple("resourse", Resource))
 )).
 
--define(XmppStanzaResult(Id, From, To), ?XmlEl("iq", [
+-define(XmppStanza(Id, From, To, Type, Content), ?XmlEl("iq", [
 	?XmlAttr("id", Id), ?XmlAttr("from", From),
-	?XmlAttr("to", To), ?XmlAttr("type", "result")
-], [], [])).
+	?XmlAttr("to", To), ?XmlAttr("type", Type)
+], [], Content)).
+
+-define(XmppStanzaResult(Id, From, To),
+	?XmppStanza(Id, From, To, "result", [])).
+
+-define(XmppStanzaError(Id, From, To, Type, Condition),
+	?XmppStanza(Id, From, To, "error",
+		?XmlEl("error", [?XmlAttr("type", Type)], [],
+			?XmlEl(Condition, [], ?XmppNsStanzas, []))
+	)
+).
 
 %% Incoming packets
 
