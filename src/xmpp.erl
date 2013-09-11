@@ -15,11 +15,15 @@
 -export([send_presence/3]).
 -export([send_message/4]).
 
--export([handle_notification/2]).
+-export([handle_notification/3]).
 
 -include("utils_monad.hrl").
 
 -include("xmpp_config.hrl").
+-include("xmpp_core_tools.hrl").
+
+-define(Ping(Id, FromJid), #stanza{stanza = iq, attributes =
+	#stanzaAttributes{id = Id, from = FromJid}, content = ping}).
 
 start() -> application:start(?MODULE).
 stop() -> application:stop(?MODULE).
@@ -54,8 +58,15 @@ send_presence(ToJid, Type, Tcp) ->
 send_message(FromJid, ToJid, Body, Tcp) ->
 	xmpp_request:send_message(FromJid, ToJid, Body, Tcp).
 
-handle_notification({push, Stanza}, _Tcp) -> {ok, Stanza};
-handle_notification(Notification, Tcp) -> result(utils_monad:do([
+handle_notification(Notification, Jid, Tcp) ->
+	case read_notification(Notification, Tcp) of
+		{ok, ?Ping(Id, FromJid)} ->
+			xmpp_request:send_stanza_result(Id, Jid, FromJid, Tcp);
+		Other -> Other
+	end.
+
+read_notification({push, Stanza}, _Tcp) -> {ok, Stanza};
+read_notification(Notification, Tcp) -> result(utils_monad:do([
 	?Function(dispatch, fun xmpp_transport:tcp_dispatch/2,
 		[Notification, Tcp]),
 	?Function(log, fun(Result) -> io:format("Read: ~p~n", [Result]) end,

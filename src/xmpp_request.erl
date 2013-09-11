@@ -21,7 +21,7 @@
 
 -export([request_vcard/3]).
 
--export([send_stanza_result/3]).
+-export([send_stanza_result/4]).
 -export([send_raw_xml/2]).
 
 -include("xmpp_utils.hrl").
@@ -79,8 +79,8 @@ send_message(FromJid, ToJid, Body, Tcp) -> StanzaId = generate_stanza_id(),
 request_vcard(FromJid, ToJid, Tcp) -> StanzaId = generate_stanza_id(),
 	send_request(StanzaId, ?XepVCard(StanzaId, FromJid, ToJid), Tcp).
 
-send_stanza_result(StanzaId, FromJid, Tcp) ->
-	send_request(StanzaId, ?XmppStanzaResult(StanzaId, FromJid), Tcp).
+send_stanza_result(StanzaId, FromJid, ToJid, Tcp) ->
+	send_request_async(?XmppStanzaResult(StanzaId, FromJid, ToJid), Tcp).
 
 send_raw_xml(Xml, Tcp) -> send_request_async(Xml, Tcp).
 

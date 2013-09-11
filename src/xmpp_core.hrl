@@ -38,10 +38,10 @@
 	?XmlEl("bind", [], ?XmppNsBind, ?XmlElSimple("resourse", Resource))
 )).
 
--define(XmppStanzaResult(Id, From), ?XmlEl("iq",
-	[?XmlAttr("id", Id), ?XmlAttr("from", From), ?XmlAttr("type", "result")],
-	[], []
-)).
+-define(XmppStanzaResult(Id, From, To), ?XmlEl("iq", [
+	?XmlAttr("id", Id), ?XmlAttr("from", From),
+	?XmlAttr("to", To), ?XmlAttr("type", "result")
+], [], [])).
 
 %% Incoming packets
 
