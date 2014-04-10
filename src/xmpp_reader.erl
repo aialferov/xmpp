@@ -181,7 +181,8 @@ read_presence(Presence) -> lists:foldl(fun
 			[read_text(Value)|OldPresence#presence.status]};
 		priority -> OldPresence#presence{priority = read_text(Value)};
 		_ -> OldPresence
-	end
+	end;
+	(_, OldPresence) -> OldPresence
 end, #presence{}, Presence).
 
 read_message(Message) -> lists:foldl(fun
