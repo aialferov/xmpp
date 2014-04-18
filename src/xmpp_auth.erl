@@ -130,8 +130,8 @@ negotiation_funs(_Network, Auth, Tcp, Mechanism = "X-FACEBOOK-PLATFORM") -> [
 		Q = utils_http:read_query(binary_to_list(base64:decode(Challenge))),
 		xmpp_request:send_sasl_response(
 			binary_to_list(base64:encode(utils_http:query_string([
-				{"nonce", utils_lists:keyfind2("nonce", Q)},
-				{"method", utils_lists:keyfind2("method", Q)},
+				{"nonce", utils_lists:value("nonce", Q)},
+				{"method", utils_lists:value("method", Q)},
 				{"api_key", client_id(Auth)},
 				{"access_token", access_token(Auth)},
 				{"call_id", "0"},
